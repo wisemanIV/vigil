@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bulk Data Test</title>
+</head>
+<body>
+    <h1>Test Bulk Data Detection</h1>
+    
+    <h2>Test Case 1: Customer Email List (Should Block)</h2>
+    <textarea id="test1" style="width: 100%; height: 150px;">
+john.doe@company.com
+jane.smith@business.com
+bob.jones@enterprise.com
+alice.wang@startup.com
+charlie.brown@firm.com
+    </textarea>
+    <button onclick="copyText('test1')">Copy to Test</button>
+    
+    <h2>Test Case 2: CSV Customer Export (Should Block)</h2>
+    <textarea id="test2" style="width: 100%; height: 150px;">
+Name,Email,Phone,Company
+John Doe,john@company.com,555-1234,Acme Corp
+Jane Smith,jane@business.com,555-5678,Tech Inc
+Bob Jones,bob@enterprise.com,555-9012,Big Co
+Alice Wang,alice@startup.com,555-3456,New Ventures
+Charlie Brown,charlie@firm.com,555-7890,Pro Services
+    </textarea>
+    <button onclick="copyText('test2')">Copy to Test</button>
+    
+    <h2>Test Case 3: Contact List (Should Block)</h2>
+    <textarea id="test3" style="width: 100%; height: 150px;">
+1. John Doe - john.doe@email.com - 555-1234
+2. Jane Smith - jane.smith@email.com - 555-5678
+3. Bob Jones - bob.jones@email.com - 555-9012
+4. Alice Wang - alice.wang@email.com - 555-3456
+5. Charlie Brown - charlie.brown@email.com - 555-7890
+6. David Lee - david.lee@email.com - 555-2345
+    </textarea>
+    <button onclick="copyText('test3')">Copy to Test</button>
+    
+    <h2>Test Case 4: Single Email (Should Allow)</h2>
+    <textarea id="test4" style="width: 100%; height: 100px;">
+Please contact John Doe at john.doe@company.com
+    </textarea>
+    <button onclick="copyText('test4')">Copy to Test</button>
+    
+    <h2>Test Case 5: Database Dump (Should Block)</h2>
+    <textarea id="test5" style="width: 100%; height: 150px;">
+INSERT INTO customers (id, name, email) VALUES 
+(1, 'John Doe', 'john@email.com'),
+(2, 'Jane Smith', 'jane@email.com'),
+(3, 'Bob Jones', 'bob@email.com');
+    </textarea>
+    <button onclick="copyText('test5')">Copy to Test</button>
+    
+    <h2>Paste Here to Test</h2>
+    <textarea id="paste-area" style="width: 100%; height: 200px;" 
+              placeholder="Paste here to test..."></textarea>
+    
+    <script>
+        function copyText(id) {
+            const text = document.getElementById(id).value;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied! Now try pasting in the test area above.');
+            });
+        }
+    </script>
+</body>
+</html>
