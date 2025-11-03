@@ -1,5 +1,6 @@
 import * as tf from '@tensorflow/tfjs';
 import * as use from '@tensorflow-models/universal-sentence-encoder';
+import BulkDataDetector from './bulk-data-detector.js';
 
 class TensorFlowDLPAnalyzer {
     constructor() {

@@ -2,21 +2,21 @@
   "type": "object",
   "properties": {
     "bulkEmailThreshold": {
-      "type": "number",
+      "type": "integer",
       "minimum": 1,
       "maximum": 50,
       "default": 3,
       "description": "Number of unique emails that triggers bulk detection"
     },
     "bulkNameThreshold": {
-      "type": "number",
+      "type": "integer",
       "minimum": 1,
       "maximum": 100,
       "default": 5,
       "description": "Number of names that triggers bulk detection"
     },
     "structuredDataThreshold": {
-      "type": "number",
+      "type": "integer",
       "minimum": 1,
       "maximum": 100,
       "default": 10,
@@ -26,6 +26,14 @@
       "type": "boolean",
       "default": false,
       "description": "Allow bulk data transfers on internal domains"
+    },
+    "internalDomains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": ["company.com", "localhost"],
+      "description": "List of internal domains where rules are less strict"
     }
   }
 }

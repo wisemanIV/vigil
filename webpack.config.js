@@ -18,12 +18,8 @@ module.exports = {
     new CopyPlugin({
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
-        ...(fs.existsSync('icons') ? [{ from: 'icons', to: 'icons' }] : []),
-        // Copy PDF.js worker
-        {
-          from: 'node_modules/pdfjs-dist/build/pdf.worker.js',
-          to: 'pdf.worker.js'
-        }
+        { from: 'schema.json', to: 'schema.json' },
+        ...(fs.existsSync('icons') ? [{ from: 'icons', to: 'icons' }] : [])
       ]
     })
   ],
@@ -35,13 +31,5 @@ module.exports = {
       "fs": false,
       "path": false
     }
-  },
-  module: {
-    rules: [
-      {
-        test: /\.worker\.js$/,
-        use: { loader: 'worker-loader' }
-      }
-    ]
   }
 };
