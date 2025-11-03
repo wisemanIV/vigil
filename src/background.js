@@ -52,6 +52,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
     
+    if (request.action === 'logScreenshot') {
+        handleLogScreenshot(request, sendResponse);
+        return true;
+    }
+    
     if (request.action === 'getStatus') {
         chrome.storage.local.get(['analyzerReady', 'initError'], (data) => {
             sendResponse({
@@ -95,21 +100,16 @@ async function handleAnalyzeFile(request, sendResponse) {
         
         console.log('Analyzing file:', request.file.name);
         
-        // Reconstruct File object from ArrayBuffer
         const file = new File(
             [request.fileData],
             request.file.name,
             { type: request.file.type }
         );
         
-        // Parse file to extract text
         const parseResult = await fileParser.parseFile(file);
-        
         console.log('File parsed, extracted text length:', parseResult.text.length);
         
-        // If no text extracted or parsing failed
         if (!parseResult.text || parseResult.text.trim().length === 0) {
-            // Check file metadata for sensitive patterns
             const metadataCheck = checkFileMetadata(request.file, parseResult.metadata);
             
             if (!metadataCheck.allowed) {
@@ -126,7 +126,6 @@ async function handleAnalyzeFile(request, sendResponse) {
                 return;
             }
             
-            // No text to analyze, allow by default
             const result = {
                 allowed: true,
                 reason: 'No text content to analyze',
@@ -140,7 +139,6 @@ async function handleAnalyzeFile(request, sendResponse) {
             return;
         }
         
-        // Analyze extracted text
         const result = await analyzer.analyze(
             parseResult.text,
             {
@@ -165,11 +163,29 @@ async function handleAnalyzeFile(request, sendResponse) {
     }
 }
 
-function checkFileMetadata(file, metadata) {
-    // Check for suspicious file characteristics
+function handleLogScreenshot(request, sendResponse) {
+    console.log('Screenshot attempt logged:', request.data);
     
-    // Very large files (>100MB) could be data exfiltration
-    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+    chrome.storage.local.get(['screenshotLog'], (data) => {
+        const log = data.screenshotLog || [];
+        
+        log.push(request.data);
+        
+        // Keep last 500 entries
+        if (log.length > 500) {
+            log.shift();
+        }
+        
+        chrome.storage.local.set({ screenshotLog: log }, () => {
+            sendResponse({ success: true });
+        });
+    });
+    
+    return true;
+}
+
+function checkFileMetadata(file, metadata) {
+    const MAX_FILE_SIZE = 100 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
         return {
             allowed: false,
@@ -177,7 +193,6 @@ function checkFileMetadata(file, metadata) {
         };
     }
     
-    // Check for encrypted or password-protected files
     if (metadata.error && metadata.error.includes('password')) {
         return {
             allowed: false,

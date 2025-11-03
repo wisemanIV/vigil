@@ -9,77 +9,66 @@
 </p>
 
 <p align="center">
-  <strong>AI-powered data loss prevention that protects your sensitive information from leaking through clipboard and file uploads.</strong>
+  <strong>AI-powered data loss prevention that protects your sensitive information from leaking through clipboard, file uploads, and screenshots.</strong>
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#how-it-works">How It Works</a> •
-  <a href="#development">Development</a> •
-  <a href="#contributing">Contributing</a> •
-  <a href="#license">License</a>
+  <a href="https://github.com/wisemanIV/vigil/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  </a>
+  <a href="https://github.com/wisemanIV/vigil/stargazers">
+    <img src="https://img.shields.io/github/stars/wisemanIV/vigil?style=social" alt="GitHub Stars">
+  </a>
+  <a href="https://github.com/wisemanIV/vigil/issues">
+    <img src="https://img.shields.io/github/issues/wisemanIV/vigil" alt="GitHub Issues">
+  </a>
+</p>
+
+<p align="center">
+  <a href="#-features">Features</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-how-it-works">How It Works</a> •
+  <a href="#%EF%B8%8F-development">Development</a> •
+  <a href="#-contributing">Contributing</a> •
+  <a href="#-license">License</a>
 </p>
 
 ---
 
 ## 🎯 Features
 
-- ✅ **Clipboard Monitoring** - Intercepts and analyzes paste operations in real-time
-- ✅ **File Upload Protection** - Scans documents before they're uploaded
-- ✅ **AI-Powered Analysis** - Uses TensorFlow.js with Universal Sentence Encoder for semantic understanding
-- ✅ **Pattern Detection** - Identifies credit cards, SSNs, API keys, passwords, and more
-- ✅ **Bulk Data Detection** - Prevents customer lists and database exports from leaking
-- ✅ **Zero Server Requirements** - All processing happens locally in your browser
-- ✅ **Privacy First** - No data sent to external servers
-- ✅ **Enterprise Ready** - Supports Group Policy and MDM deployment
+### Core Protection
+- ✅ **Clipboard Monitoring** - Real-time analysis of paste operations
+- ✅ **File Upload Protection** - Scans documents before upload
+- ✅ **Screenshot Protection** 🔥 - Detects and blurs sensitive content during screenshots
+- ✅ **AI-Powered Analysis** - TensorFlow.js with Universal Sentence Encoder
+- ✅ **Pattern Detection** - Credit cards, SSNs, API keys, passwords, and more
+- ✅ **Bulk Data Detection** - Prevents customer lists and database dumps from leaking
+
+### Advanced Features
+- 🔍 **Semantic Understanding** - Context-aware analysis using machine learning
+- 📊 **Real-time Scanning** - Continuous monitoring of visible content
+- 🎯 **Smart Blurring** - Automatically obscures sensitive data during screenshots
+- 📝 **Audit Logging** - Complete history of all protection events
+- ⚙️ **Configurable Settings** - Customize protection levels and behaviors
+- 🔒 **Privacy First** - 100% local processing, no data sent to servers
+
+### Enterprise Ready
+- 🏢 **Group Policy Support** - Deploy via GPO or MDM
+- 📋 **Managed Configuration** - Centralized policy management
+- 📊 **Compliance Logging** - Detailed audit trails for compliance
+- 🌐 **Domain Whitelisting** - Different rules for internal vs external sites
 
 ## 🚀 Quick Start
 
-### Installation
+### For Users
 
-#### For Users
-1. Download the latest release from [Releases](https://github.com/yourusername/vigil/releases)
+**Option 1: Install from Release**
+1. Download the latest release from [Releases](https://github.com/wisemanIV/vigil/releases)
 2. Extract the ZIP file
 3. Open Chrome and go to `chrome://extensions/`
-4. Enable "Developer mode"
+4. Enable "Developer mode" (toggle in top-right)
 5. Click "Load unpacked" and select the extracted folder
 
-#### For Enterprises
-See [Enterprise Deployment Guide](docs/ENTERPRISE_DEPLOYMENT.md)
-
-## 🔍 How It Works
-
-Vigil uses a multi-layered approach to detect sensitive data:
-
-1. **Pattern Matching** - Fast regex-based detection for known formats (SSN, credit cards, etc.)
-2. **Semantic Analysis** - TensorFlow.js analyzes content meaning and context
-3. **Bulk Data Detection** - Identifies lists, CSV exports, and database dumps
-4. **Contextual Rules** - Different policies for internal vs. external domains
-
-### What Vigil Detects
-
-| Category | Examples |
-|----------|----------|
-| **Financial** | Credit cards, SSNs, bank accounts |
-| **Credentials** | Passwords, API keys, private keys, tokens |
-| **PII** | Email addresses, phone numbers, addresses |
-| **Bulk Data** | Customer lists, email distributions, database exports |
-| **Confidential** | Documents marked confidential, proprietary info |
-
-## 📊 Performance
-
-- **Clipboard Analysis**: 10-50ms average
-- **File Parsing**: 100-500ms depending on size
-- **Memory Usage**: ~150MB (includes TensorFlow models)
-- **Offline Capable**: Yes, all processing is local
-
-## 🛠️ Development
-
-### Prerequisites
-
-- Node.js 16+ and npm
-- Chrome/Chromium browser
-
-### Setup
+**Option 2: Build from Source**
 ```bash

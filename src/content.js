@@ -1,4 +1,5 @@
 import UploadMonitor from './monitors/upload-monitor.js';
+import ScreenshotMonitor from './monitors/screenshot-monitor.js';
 
 (function() {
     'use strict';
@@ -7,6 +8,7 @@ import UploadMonitor from './monitors/upload-monitor.js';
     
     let analyzerReady = false;
     let uploadMonitor = null;
+    let screenshotMonitor = null;
     
     // Check analyzer status
     chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
@@ -14,30 +16,41 @@ import UploadMonitor from './monitors/upload-monitor.js';
         console.log('[DLP] Analyzer status:', analyzerReady ? 'Ready' : 'Initializing...');
         
         if (analyzerReady) {
-            initializeUploadMonitor();
+            initializeMonitors();
         } else {
-            console.log('[DLP] Waiting for analyzer to be ready...');
-            // Retry after delay
             setTimeout(() => {
                 chrome.runtime.sendMessage({ action: 'getStatus' }, (resp) => {
                     if (resp?.ready) {
-                        initializeUploadMonitor();
+                        initializeMonitors();
                     }
                 });
             }, 3000);
         }
     });
     
-    // Initialize upload monitor
-    function initializeUploadMonitor() {
-        console.log('[DLP] Initializing upload monitor...');
+    function initializeMonitors() {
+        console.log('[DLP] Initializing monitors...');
+        
+        // Upload monitor
         try {
             uploadMonitor = new UploadMonitor(handleFileUpload);
             uploadMonitor.initialize();
-            console.log('[DLP] Upload monitor initialized successfully');
         } catch (error) {
             console.error('[DLP] Failed to initialize upload monitor:', error);
         }
+        
+        // Screenshot monitor
+        try {
+            screenshotMonitor = new ScreenshotMonitor(handleScreenshotAttempt);
+            screenshotMonitor.initialize();
+        } catch (error) {
+            console.error('[DLP] Failed to initialize screenshot monitor:', error);
+        }
+    }
+    
+    // Handle screenshot attempts
+    function handleScreenshotAttempt(data) {
+        console.log('[DLP] Screenshot attempt:', data);
     }
     
     // Handle file uploads
@@ -150,4 +163,11 @@ import UploadMonitor from './monitors/upload-monitor.js';
         
         setTimeout(() => notification.remove(), duration);
     }
+    
+    // Cleanup on unload
+    window.addEventListener('beforeunload', () => {
+        if (screenshotMonitor) {
+            screenshotMonitor.cleanup();
+        }
+    });
 })();

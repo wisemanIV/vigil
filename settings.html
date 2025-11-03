@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vigil Settings</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 24px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 { color: #1a73e8; }
+        .setting {
+            margin: 20px 0;
+            padding: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        input[type="checkbox"] {
+            margin-right: 8px;
+            width: 20px;
+            height: 20px;
+        }
+        button {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #1557b0;
+        }
+        .saved {
+            color: #34a853;
+            margin-left: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🛡️ Vigil Settings</h1>
+    
+    <div class="setting">
+        <h2>Screenshot Protection</h2>
+        <label>
+            <input type="checkbox" id="screenshotEnabled" checked>
+            Enable screenshot monitoring
+        </label>
+        <br><br>
+        <label>
+            <input type="checkbox" id="autoBlur" checked>
+            Automatically blur sensitive content when screenshot detected
+        </label>
+        <br><br>
+        <label>
+            <input type="checkbox" id="logAttempts" checked>
+            Log screenshot attempts
+        </label>
+    </div>
+    
+    <button id="save">Save Settings</button>
+    <span id="savedMessage" class="saved" style="display: none;">✓ Saved</span>
+    
+    <script src="settings.js"></script>
+</body>
+</html>

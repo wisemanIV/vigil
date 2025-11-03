@@ -17,8 +17,13 @@ module.exports = {
   plugins: [
     new CopyPlugin({
       patterns: [
+        // Always copy
         { from: 'manifest.json', to: 'manifest.json' },
-        { from: 'schema.json', to: 'schema.json' },
+        
+        // Conditionally copy if files exist
+        ...(fs.existsSync('settings.html') ? [{ from: 'settings.html', to: 'settings.html' }] : []),
+        ...(fs.existsSync('settings.js') ? [{ from: 'settings.js', to: 'settings.js' }] : []),
+        ...(fs.existsSync('schema.json') ? [{ from: 'schema.json', to: 'schema.json' }] : []),
         ...(fs.existsSync('icons') ? [{ from: 'icons', to: 'icons' }] : [])
       ]
     })
@@ -29,7 +34,13 @@ module.exports = {
       "stream": false,
       "util": false,
       "fs": false,
-      "path": false
+      "path": false,
+      "buffer": false
     }
+  },
+  performance: {
+    hints: false,
+    maxEntrypointSize: 512000,
+    maxAssetSize: 512000
   }
 };
