@@ -1,232 +1,231 @@
-import TensorFlowDLPAnalyzer from './analyzers/tf-analyzer.js';
-import FileParser from './analyzers/file-parser.js';
+// background.js
 
-let analyzer = null;
-let fileParser = null;
-let initPromise = null;
+import HybridAnalyzer from './analyzers/hybrid-analyzer.js';
 
-async function initializeAnalyzer() {
-    if (initPromise) return initPromise;
-    
-    initPromise = (async () => {
-        try {
-            console.log('Starting initialization...');
-            
-            analyzer = new TensorFlowDLPAnalyzer();
-            await analyzer.initialize();
-            
-            fileParser = new FileParser();
-            
-            await chrome.storage.local.set({ 
-                analyzerReady: true,
-                initTime: Date.now()
-            });
-            
-            console.log('Analyzer and file parser ready!');
-            return { analyzer, fileParser };
-        } catch (error) {
-            console.error('Initialization failed:', error);
-            await chrome.storage.local.set({ 
-                analyzerReady: false,
-                initError: error.message
-            });
-            throw error;
-        }
-    })();
-    
-    return initPromise;
-}
+console.log('[Background] Service worker starting...');
 
-// Start initialization
-initializeAnalyzer();
+const analyzer = new HybridAnalyzer();
+let analyzerReady = false;
+
+// Initialize analyzer on extension load
+analyzer.initialize()
+    .then(() => {
+        analyzerReady = true;
+        console.log('[Background] Hybrid analyzer initialized');
+    })
+    .catch(error => {
+        console.error('[Background] Analyzer initialization failed:', error);
+        analyzerReady = true; // Still mark as ready (fast layer works)
+    });
 
 // Message handler
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('[Background] Received message:', request.action);
+    
+    // Handle paste analysis
     if (request.action === 'analyzePaste') {
-        handleAnalyzePaste(request, sendResponse);
-        return true;
+        handlePasteAnalysis(request, sendResponse);
+        return true; // Keep channel open for async response
     }
     
+    // Handle file analysis
     if (request.action === 'analyzeFile') {
-        handleAnalyzeFile(request, sendResponse);
+        handleFileAnalysis(request, sendResponse);
         return true;
     }
     
-    if (request.action === 'logScreenshot') {
-        handleLogScreenshot(request, sendResponse);
-        return true;
-    }
-    
+    // Get analyzer status
     if (request.action === 'getStatus') {
-        chrome.storage.local.get(['analyzerReady', 'initError'], (data) => {
-            sendResponse({
-                ready: data.analyzerReady || false,
-                error: data.initError || null
-            });
+        const status = analyzer.getStatus();
+        sendResponse({
+            ready: analyzerReady,
+            ...status
         });
+        return false;
+    }
+    
+    // Log screenshot attempt
+    if (request.action === 'logScreenshot') {
+        handleScreenshotLog(request, sendResponse);
         return true;
     }
+    
+    return false;
 });
 
-async function handleAnalyzePaste(request, sendResponse) {
+async function handlePasteAnalysis(request, sendResponse) {
+    const { content, context } = request;
+    
+    console.log('[Background] Analyzing paste:', {
+        length: content.length,
+        url: context.url,
+        element: context.elementType
+    });
+    
     try {
-        if (!analyzer) {
-            await initializeAnalyzer();
-        }
+        const result = await analyzer.analyze(content, context);
         
-        const result = await analyzer.analyze(
-            request.content,
-            request.context
-        );
+        console.log('[Background] Paste analysis complete:', {
+            allowed: result.allowed,
+            stage: result.stage,
+            time: Math.round(result.analysis_took_ms) + 'ms',
+            findings: result.findings.length
+        });
         
-        logAnalysis('paste', request.context, result);
         sendResponse(result);
         
     } catch (error) {
-        console.error('Paste analysis failed:', error);
+        console.error('[Background] Paste analysis error:', error);
         sendResponse({
-            allowed: false,
-            reason: 'Analysis error',
+            allowed: true, // Fail open
+            message: 'Analysis error - paste allowed',
+            findings: [],
             error: error.message
         });
     }
 }
 
-async function handleAnalyzeFile(request, sendResponse) {
+async function handleFileAnalysis(request, sendResponse) {
+    const { file, fileData, context } = request;
+    
+    console.log('[Background] Analyzing file:', {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: context.url
+    });
+    
     try {
-        if (!analyzer || !fileParser) {
-            await initializeAnalyzer();
-        }
+        // Convert ArrayBuffer to text if it's a text file
+        let content = '';
         
-        console.log('Analyzing file:', request.file.name);
-        
-        const file = new File(
-            [request.fileData],
-            request.file.name,
-            { type: request.file.type }
-        );
-        
-        const parseResult = await fileParser.parseFile(file);
-        console.log('File parsed, extracted text length:', parseResult.text.length);
-        
-        if (!parseResult.text || parseResult.text.trim().length === 0) {
-            const metadataCheck = checkFileMetadata(request.file, parseResult.metadata);
+        if (file.type.startsWith('text/') || 
+            file.name.endsWith('.txt') ||
+            file.name.endsWith('.csv') ||
+            file.name.endsWith('.json') ||
+            file.name.endsWith('.xml')) {
             
-            if (!metadataCheck.allowed) {
-                const result = {
-                    allowed: false,
-                    reason: metadataCheck.reason,
-                    findings: [],
-                    analysisTime: 0,
-                    fileMetadata: parseResult.metadata
-                };
-                
-                logAnalysis('file', request.context, result, request.file);
-                sendResponse(result);
-                return;
+            const decoder = new TextDecoder('utf-8');
+            content = decoder.decode(fileData);
+            
+            // Limit content size for analysis (first 50KB)
+            if (content.length > 50000) {
+                content = content.substring(0, 50000);
             }
-            
-            const result = {
+        } else {
+            // For binary files, just do basic checks
+            sendResponse({
                 allowed: true,
-                reason: 'No text content to analyze',
-                findings: [],
-                analysisTime: 0,
-                fileMetadata: parseResult.metadata
-            };
-            
-            logAnalysis('file', request.context, result, request.file);
-            sendResponse(result);
+                reason: 'Binary file - limited analysis',
+                findings: []
+            });
             return;
         }
         
-        const result = await analyzer.analyze(
-            parseResult.text,
-            {
-                ...request.context,
-                fileType: parseResult.metadata.type,
-                fileName: request.file.name
-            }
-        );
+        // Analyze file content
+        const result = await analyzer.analyze(content, {
+            ...context,
+            fileName: file.name,
+            fileType: file.type
+        });
         
-        result.fileMetadata = parseResult.metadata;
+        console.log('[Background] File analysis complete:', {
+            allowed: result.allowed,
+            findings: result.findings.length
+        });
         
-        logAnalysis('file', request.context, result, request.file);
         sendResponse(result);
         
     } catch (error) {
-        console.error('File analysis failed:', error);
+        console.error('[Background] File analysis error:', error);
         sendResponse({
             allowed: false,
-            reason: 'File analysis error',
+            reason: 'Analysis error',
+            findings: [],
             error: error.message
         });
     }
 }
 
-function handleLogScreenshot(request, sendResponse) {
-    console.log('Screenshot attempt logged:', request.data);
+async function handleScreenshotLog(request, sendResponse) {
+    const { data } = request;
     
-    chrome.storage.local.get(['screenshotLog'], (data) => {
-        const log = data.screenshotLog || [];
+    console.log('[Background] Screenshot attempt logged:', {
+        method: data.method,
+        hasSensitiveData: data.hasSensitiveData,
+        elementCount: data.elementCount,
+        url: data.url
+    });
+    
+    // Store screenshot log (optional - you can save to chrome.storage)
+    try {
+        const logs = await chrome.storage.local.get(['screenshotLogs']) || { screenshotLogs: [] };
+        const screenshotLogs = logs.screenshotLogs || [];
         
-        log.push(request.data);
-        
-        // Keep last 500 entries
-        if (log.length > 500) {
-            log.shift();
-        }
-        
-        chrome.storage.local.set({ screenshotLog: log }, () => {
-            sendResponse({ success: true });
+        screenshotLogs.push({
+            ...data,
+            timestamp: Date.now()
         });
-    });
-    
-    return true;
-}
-
-function checkFileMetadata(file, metadata) {
-    const MAX_FILE_SIZE = 100 * 1024 * 1024;
-    if (file.size > MAX_FILE_SIZE) {
-        return {
-            allowed: false,
-            reason: `File too large (${(file.size / 1024 / 1024).toFixed(2)}MB > 100MB limit)`
-        };
-    }
-    
-    if (metadata.error && metadata.error.includes('password')) {
-        return {
-            allowed: false,
-            reason: 'Encrypted or password-protected files not allowed'
-        };
-    }
-    
-    return { allowed: true };
-}
-
-function logAnalysis(type, context, result, file = null) {
-    chrome.storage.local.get(['auditLog'], (data) => {
-        const log = data.auditLog || [];
         
-        const entry = {
-            timestamp: Date.now(),
-            type: type,
-            url: new URL(context.url).hostname,
-            allowed: result.allowed,
-            findingsCount: result.findings?.length || 0,
-            analysisTime: result.analysisTime,
-            reason: result.reason
-        };
-        
-        if (file) {
-            entry.fileName = file.name;
-            entry.fileType = file.type;
-            entry.fileSize = file.size;
+        // Keep only last 100 logs
+        if (screenshotLogs.length > 100) {
+            screenshotLogs.shift();
         }
         
-        log.push(entry);
+        await chrome.storage.local.set({ screenshotLogs });
         
-        if (log.length > 1000) log.shift();
-        
-        chrome.storage.local.set({ auditLog: log });
-    });
+        sendResponse({ success: true });
+    } catch (error) {
+        console.error('[Background] Failed to log screenshot:', error);
+        sendResponse({ success: false, error: error.message });
+    }
 }
+
+// Extension installed/updated
+chrome.runtime.onInstalled.addListener((details) => {
+    console.log('[Background] Extension installed/updated:', details.reason);
+    
+    if (details.reason === 'install') {
+        console.log('[Background] First time installation');
+        // Set default settings
+        chrome.storage.local.set({
+            screenshotProtection: {
+                enabled: true,
+                autoBlur: true,
+                logAttempts: true,
+                showIndicator: true
+            }
+        });
+    }
+});
+
+// Extension startup
+chrome.runtime.onStartup.addListener(() => {
+    console.log('[Background] Extension startup');
+});
+
+// Keep service worker alive (optional, for Manifest V3)
+let keepAliveInterval;
+
+function keepAlive() {
+    keepAliveInterval = setInterval(() => {
+        chrome.runtime.getPlatformInfo(() => {
+            // Just a dummy call to keep service worker alive
+        });
+    }, 20000); // Every 20 seconds
+}
+
+// Start keep-alive
+keepAlive();
+
+// Clean up on unload
+self.addEventListener('unload', () => {
+    if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+    }
+    if (analyzer) {
+        analyzer.dispose();
+    }
+});
+
+console.log('[Background] Service worker loaded and ready');

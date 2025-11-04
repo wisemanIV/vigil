@@ -1,0 +1,17 @@
+{
+  "name": "vigil-tests",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:chatgpt": "node --experimental-vm-modules node_modules/jest/bin/jest.js specs/chatgpt-paste.test.js",
+    "test:sheets": "node --experimental-vm-modules node_modules/jest/bin/jest.js specs/sheets-paste.test.js",
+    "test:all": "node --experimental-vm-modules node_modules/jest/bin/jest.js specs/",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch"
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "jest": "^29.7.0",
+    "puppeteer": "^21.5.0"
+  }
+}

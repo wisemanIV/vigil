@@ -17,12 +17,9 @@ module.exports = {
   plugins: [
     new CopyPlugin({
       patterns: [
-        // Always copy
         { from: 'manifest.json', to: 'manifest.json' },
-        
-        // Conditionally copy if files exist
-        ...(fs.existsSync('settings.html') ? [{ from: 'settings.html', to: 'settings.html' }] : []),
-        ...(fs.existsSync('settings.js') ? [{ from: 'settings.js', to: 'settings.js' }] : []),
+        { from: 'settings.html', to: 'settings.html' },
+        { from: 'settings.js', to: 'settings.js' },
         ...(fs.existsSync('schema.json') ? [{ from: 'schema.json', to: 'schema.json' }] : []),
         ...(fs.existsSync('icons') ? [{ from: 'icons', to: 'icons' }] : [])
       ]
