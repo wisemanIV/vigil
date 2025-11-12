@@ -5,7 +5,7 @@
  * and customizable detection patterns for the DLP system.
  */
 
-export class VigilConfig {
+class VigilConfig {
     constructor() {
         this.initialize();
     }
