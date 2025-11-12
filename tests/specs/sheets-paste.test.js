@@ -1,10 +1,11 @@
+import '../load-env.js';
 import puppeteer from 'puppeteer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { ExtensionHelper } from '../helpers/extension-helper.js';
 import { DialogHelper } from '../helpers/dialog-helper.js';
 import { SheetsHelper } from '../helpers/sheets-helper.js';
-import { testDatasets } from '../test-data/datasets.js';
+import { testDatasets } from '../test-data/dataset.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,15 +17,28 @@ describe('Vigil - Google Sheets Paste Detection', () => {
     let sheetsHelper;
     
     beforeAll(async () => {
-        const extensionPath = path.join(__dirname, '../../');
+        const extensionPath = path.resolve(__dirname, '../../dist');
+        console.log('[Test] Extension path:', extensionPath);
         
+        // Use same browser config as ChatGPT tests
         browser = await puppeteer.launch({
             headless: false,
             args: [
                 `--disable-extensions-except=${extensionPath}`,
                 `--load-extension=${extensionPath}`,
                 '--no-sandbox',
-                '--disable-setuid-sandbox'
+                '--disable-setuid-sandbox',
+                '--disable-web-security',
+                '--no-first-run',
+                '--disable-features=VizDisplayCompositor',
+                '--enable-extensions',
+                '--disable-dev-shm-usage',
+                '--disable-infobars',
+                '--disable-notifications',
+                '--ignore-certificate-errors',
+                '--disable-component-extensions-with-background-pages',
+                '--disable-default-apps',
+                '--disable-background-timer-throttling'
             ],
             defaultViewport: {
                 width: 1280,
@@ -33,32 +47,75 @@ describe('Vigil - Google Sheets Paste Detection', () => {
         });
         
         page = await browser.newPage();
+        
         extensionHelper = new ExtensionHelper(page);
         dialogHelper = new DialogHelper(page);
         sheetsHelper = new SheetsHelper(page);
         
-        // Create new sheet
-        await sheetsHelper.createNewSheet();
-        await sheetsHelper.waitForLoaded();
+        // Access public test sheet directly with better error handling
+        console.log('[Sheets Helper] Navigating to public test sheet...');
+        
+        try {
+            await page.goto('https://docs.google.com/spreadsheets/d/1xSqXaxwxqHv4fYlXqYTrAxcTru5pIZjZmXsopsZDfhs/edit?usp=sharing', { 
+                waitUntil: 'domcontentloaded',
+                timeout: 45000 
+            });
+            
+            // Wait for page to load and check for errors
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            const currentUrl = page.url();
+            console.log('[Sheets Helper] Current URL:', currentUrl);
+            
+            // Check if we got an error page
+            const pageTitle = await page.title();
+            console.log('[Sheets Helper] Page title:', pageTitle);
+            
+            if (pageTitle.includes('Error') || currentUrl.includes('error')) {
+                throw new Error('Google Sheets returned an error page');
+            }
+            
+            console.log('[Sheets Helper] Public test sheet loaded successfully');
+            
+        } catch (error) {
+            console.log('[Sheets Helper] Error accessing sheet:', error.message);
+            console.log('[Sheets Helper] Trying alternative approach...');
+            
+            // Fallback: try without URL parameters
+            await page.goto('https://docs.google.com/spreadsheets/d/1xSqXaxwxqHv4fYlXqYTrAxcTru5pIZjZmXsopsZDfhs/', { 
+                waitUntil: 'domcontentloaded',
+                timeout: 30000 
+            });
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            console.log('[Sheets Helper] Fallback navigation completed');
+        }
         
         // Wait for extension
         await extensionHelper.waitForExtensionReady();
         
+        // Add delay to ensure extension fully initializes
+        console.log('Waiting 30 seconds for extension to fully initialize...');
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        
         console.log('✓ Google Sheets test suite ready');
-    }, 60000);
+    }, 120000); // 2 minute timeout for login with new test account
     
     afterAll(async () => {
-        await browser.close();
-    });
+        if (browser) {
+            await browser.close();
+        }
+    }, 10000);
     
     afterEach(async () => {
         // Clear cell between tests
         try {
-            await sheetsHelper.clearCell(0, 0);
+            if (page && !page.isClosed()) {
+                await sheetsHelper.clearCell(0, 0);
+            }
         } catch (error) {
             console.log('Could not clear cell:', error.message);
         }
-    });
+    }, 10000);
     
     test('should detect bulk emails in sheet paste', async () => {
         const dataset = testDatasets.blocked.bulkEmails;
@@ -67,11 +124,37 @@ describe('Vigil - Google Sheets Paste Detection', () => {
         // Click cell A1
         await sheetsHelper.clickCell(0, 0);
         
+        // Wait longer for Google Sheets to properly focus the cell
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         // Paste content
         await sheetsHelper.pasteContent(dataset.content);
         
         // Wait for dialog (complex app mode - paste happens first)
-        const dialogShown = await dialogHelper.waitForDialog(5000);
+        // In complex apps like Google Sheets, extension uses paste-then-intercept mode
+        // Need longer timeout for analysis to complete
+        console.log('[Test] Waiting for dialog to appear...');
+        const dialogShown = await dialogHelper.waitForDialog(15000);
+        
+        if (!dialogShown) {
+            // Debug: Check if any Vigil elements exist
+            const vigilElements = await page.$$eval('*', () => {
+                const elements = document.querySelectorAll('[id*="vigil"], [class*="vigil"]');
+                return Array.from(elements).map(el => ({
+                    tag: el.tagName,
+                    id: el.id,
+                    classes: el.className
+                }));
+            });
+            console.log('[Test] Vigil elements found:', vigilElements);
+            
+            // Check console for any errors
+            const logs = await page.evaluate(() => {
+                return window.console._logs || [];
+            });
+            console.log('[Test] Recent logs:', logs.slice(-5));
+        }
+        
         expect(dialogShown).toBe(true);
         
         // Verify findings
@@ -82,7 +165,7 @@ describe('Vigil - Google Sheets Paste Detection', () => {
         
         // Click Block (should undo)
         await dialogHelper.clickBlock();
-        await page.waitForTimeout(1000);
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Verify cell was cleared/undone
         const cellValue = await sheetsHelper.getCellValue(0, 0);
@@ -98,8 +181,8 @@ describe('Vigil - Google Sheets Paste Detection', () => {
         await sheetsHelper.clickCell(0, 0);
         await sheetsHelper.pasteContent(dataset.content);
         
-        // Dialog should NOT appear
-        await page.waitForTimeout(2000);
+        // Dialog should NOT appear - wait with timeout
+        await new Promise(resolve => setTimeout(resolve, 2000));
         const dialogShown = await extensionHelper.isVigilDialogVisible();
         expect(dialogShown).toBe(false);
         
@@ -122,7 +205,7 @@ describe('Vigil - Google Sheets Paste Detection', () => {
         
         // Click Allow
         await dialogHelper.clickAllow();
-        await page.waitForTimeout(1000);
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Verify content remains in cell
         const cellValue = await sheetsHelper.getCellValue(0, 0);

@@ -96,14 +96,26 @@ async function handleFileAnalysis(request, sendResponse) {
     });
     
     try {
-        // Convert ArrayBuffer to text if it's a text file
+        // Create file object for metadata analysis
+        const fileObj = {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            lastModified: file.lastModified
+        };
+        
+        // Extract content for content analysis (if applicable)
         let content = '';
+        let hasContent = false;
         
         if (file.type.startsWith('text/') || 
             file.name.endsWith('.txt') ||
             file.name.endsWith('.csv') ||
             file.name.endsWith('.json') ||
-            file.name.endsWith('.xml')) {
+            file.name.endsWith('.xml') ||
+            file.name.endsWith('.js') ||
+            file.name.endsWith('.py') ||
+            file.name.endsWith('.sql')) {
             
             const decoder = new TextDecoder('utf-8');
             content = decoder.decode(fileData);
@@ -112,26 +124,22 @@ async function handleFileAnalysis(request, sendResponse) {
             if (content.length > 50000) {
                 content = content.substring(0, 50000);
             }
-        } else {
-            // For binary files, just do basic checks
-            sendResponse({
-                allowed: true,
-                reason: 'Binary file - limited analysis',
-                findings: []
-            });
-            return;
+            hasContent = true;
         }
         
-        // Analyze file content
-        const result = await analyzer.analyze(content, {
+        // Use the comprehensive file analysis from FastAnalyzer
+        const enhancedContext = {
             ...context,
-            fileName: file.name,
-            fileType: file.type
-        });
+            content: hasContent ? content : null
+        };
+        
+        const result = await analyzer.fastAnalyzer.analyzeFile(fileObj, enhancedContext);
         
         console.log('[Background] File analysis complete:', {
             allowed: result.allowed,
-            findings: result.findings.length
+            findings: result.findings.length,
+            riskLevel: result.fileMetadata?.riskLevel,
+            totalScore: result.fileMetadata?.totalScore
         });
         
         sendResponse(result);

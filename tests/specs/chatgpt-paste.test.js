@@ -1,10 +1,11 @@
+import '../load-env.js';
 import puppeteer from 'puppeteer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { ExtensionHelper } from '../helpers/extension-helper.js';
 import { DialogHelper } from '../helpers/dialog-helper.js';
 import { ChatGPTHelper } from '../helpers/chatgpt-helper.js';
-import { testDatasets } from '../test-data/datasets.js';
+import { testDatasets } from '../test-data/dataset.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,7 +17,8 @@ describe('Vigil - ChatGPT Paste Detection', () => {
     let chatgptHelper;
     
     beforeAll(async () => {
-        const extensionPath = path.join(__dirname, '../../');
+        const extensionPath = path.resolve(__dirname, '../../dist');
+        console.log('[Test] Extension path:', extensionPath);
         
         browser = await puppeteer.launch({
             headless: false,
@@ -24,7 +26,18 @@ describe('Vigil - ChatGPT Paste Detection', () => {
                 `--disable-extensions-except=${extensionPath}`,
                 `--load-extension=${extensionPath}`,
                 '--no-sandbox',
-                '--disable-setuid-sandbox'
+                '--disable-setuid-sandbox',
+                '--disable-web-security',
+                '--no-first-run',
+                '--disable-features=VizDisplayCompositor',
+                '--enable-extensions',
+                '--disable-dev-shm-usage',
+                '--disable-infobars',
+                '--disable-notifications',
+                '--ignore-certificate-errors',
+                '--disable-component-extensions-with-background-pages',
+                '--disable-default-apps',
+                '--disable-background-timer-throttling'
             ],
             defaultViewport: {
                 width: 1280,
@@ -33,6 +46,19 @@ describe('Vigil - ChatGPT Paste Detection', () => {
         });
         
         page = await browser.newPage();
+        
+        // Capture console logs
+        page.on('console', msg => {
+            const type = msg.type();
+            const text = msg.text();
+            
+            // Log all extension-related messages
+            if (text.includes('Vigil') || text.includes('Background') || text.includes('Extension') || 
+                type === 'error' || type === 'warn') {
+                console.log(`[Browser ${type.toUpperCase()}]:`, text);
+            }
+        });
+        
         extensionHelper = new ExtensionHelper(page);
         dialogHelper = new DialogHelper(page);
         chatgptHelper = new ChatGPTHelper(page);
@@ -44,21 +70,30 @@ describe('Vigil - ChatGPT Paste Detection', () => {
         // Wait for extension to be ready
         await extensionHelper.waitForExtensionReady();
         
+        // Add delay to ensure extension fully initializes
+        console.log('Waiting 30 seconds for extension to fully initialize...');
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        
         console.log('✓ ChatGPT test suite ready');
     }, 60000); // 60 second timeout for initial setup
     
     afterAll(async () => {
-        await browser.close();
-    });
+        console.log('✓ Tests completed - closing browser');
+        if (browser) {
+            await browser.close();
+        }
+    }, 10000);
     
     afterEach(async () => {
         // Clear input between tests
         try {
-            await chatgptHelper.clearPrompt();
+            if (page && !page.isClosed()) {
+                await chatgptHelper.clearPrompt();
+            }
         } catch (error) {
             console.log('Could not clear prompt:', error.message);
         }
-    });
+    }, 10000);
     
     test('should block bulk email paste and show dialog', async () => {
         const dataset = testDatasets.blocked.bulkEmails;
@@ -86,7 +121,7 @@ describe('Vigil - ChatGPT Paste Detection', () => {
         await dialogHelper.clickBlock();
         
         // Verify content was not pasted
-        await page.waitForTimeout(500);
+        await new Promise(resolve => setTimeout(resolve, 500));
         const promptValue = await chatgptHelper.getPromptValue();
         expect(promptValue).not.toContain(dataset.content.split('\n')[0]);
         
@@ -120,7 +155,7 @@ describe('Vigil - ChatGPT Paste Detection', () => {
         await chatgptHelper.pasteContent(dataset.content);
         
         // Dialog should NOT appear
-        await page.waitForTimeout(2000);
+        await new Promise(resolve => setTimeout(resolve, 2000));
         const dialogShown = await extensionHelper.isVigilDialogVisible();
         expect(dialogShown).toBe(false);
         
@@ -142,7 +177,7 @@ describe('Vigil - ChatGPT Paste Detection', () => {
         
         // Click Allow
         await dialogHelper.clickAllow();
-        await page.waitForTimeout(500);
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Verify content was pasted
         const promptValue = await chatgptHelper.getPromptValue();

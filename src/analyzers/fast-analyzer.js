@@ -1,8 +1,14 @@
 import BulkDataDetector from './bulk-data-detector.js';
+import { ContentClassificationDetector } from './content-classification-detector.js';
+import { FileMetadataAnalyzer } from './file-metadata-analyzer.js';
+import { GlobalConfig } from '../config/global-config.js';
 
 class FastAnalyzer {
     constructor() {
+        this.config = GlobalConfig;
         this.bulkDetector = new BulkDataDetector();
+        this.classificationDetector = new ContentClassificationDetector();
+        this.fileMetadataAnalyzer = new FileMetadataAnalyzer();
     }
     
     async analyze(content, context) {
@@ -19,10 +25,13 @@ class FastAnalyzer {
                 };
             }
             
-            // Run fast checks only
+            // Run all detection layers
             const patternFindings = this.detectPatterns(content);
             const bulkFindings = this.bulkDetector.analyze(content);
             const densityFinding = this.bulkDetector.analyzeDensity(content);
+            
+            // Run comprehensive content classification with destination context
+            const classificationResult = this.classificationDetector.analyze(content, context);
             
             // Combine findings
             const findings = [
@@ -31,6 +40,11 @@ class FastAnalyzer {
                 ...(densityFinding ? [densityFinding] : [])
             ];
             
+            // Add classification as a finding if content is not PUBLIC
+            if (classificationResult.classification !== 'PUBLIC') {
+                findings.push(classificationResult);
+            }
+            
             // Make decision
             const decision = this.evaluateFindings(findings, context);
             
@@ -38,6 +52,7 @@ class FastAnalyzer {
                 allowed: decision.allowed,
                 message: decision.message,
                 findings: findings,
+                classification: classificationResult,
                 analysis_took_ms: performance.now() - startTime
             };
             
@@ -51,6 +66,117 @@ class FastAnalyzer {
                 analysis_took_ms: performance.now() - startTime
             };
         }
+    }
+
+    /**
+     * Analyze file upload for metadata-based risks
+     * @param {File} file - Browser File object
+     * @param {Object} context - Context including destination URL
+     * @returns {Object} Analysis result
+     */
+    async analyzeFile(file, context = {}) {
+        const startTime = performance.now();
+        
+        try {
+            // Fast metadata analysis (no content reading)
+            const metadataResult = this.fileMetadataAnalyzer.analyzeFileMetadata(file, context);
+            
+            // If file content is available, also run content classification
+            let contentResult = null;
+            if (context.content) {
+                contentResult = this.classificationDetector.analyze(context.content, context);
+            }
+
+            // Combine results
+            const findings = [...metadataResult.findings];
+            if (contentResult && contentResult.classification !== 'PUBLIC') {
+                findings.push(contentResult);
+            }
+
+            // Make decision based on combined analysis
+            const decision = this.evaluateFileFindings(metadataResult, contentResult, context);
+
+            return {
+                allowed: decision.allowed,
+                message: decision.message,
+                findings,
+                fileMetadata: metadataResult,
+                contentClassification: contentResult,
+                analysis_took_ms: performance.now() - startTime
+            };
+
+        } catch (error) {
+            console.error('[Fast Analyzer] File analysis failed:', error);
+            return {
+                allowed: true, // Fail open for better UX
+                message: 'File analysis error - allowing upload',
+                findings: [],
+                error: error.message,
+                analysis_took_ms: performance.now() - startTime
+            };
+        }
+    }
+
+    /**
+     * Evaluate findings for file uploads
+     */
+    evaluateFileFindings(metadataResult, contentResult, context) {
+        // Critical file metadata risks should be blocked
+        if (metadataResult.riskLevel === 'CRITICAL') {
+            return {
+                allowed: false,
+                message: `Critical file risk: ${metadataResult.recommendation}`
+            };
+        }
+
+        // High-risk file metadata with high-risk destination
+        if (metadataResult.riskLevel === 'HIGH' && context.destinationRisk === 'HIGH') {
+            return {
+                allowed: false,
+                message: `High-risk file to high-risk destination blocked: ${metadataResult.recommendation}`
+            };
+        }
+
+        // Content classification takes precedence if available
+        if (contentResult) {
+            if (['HIGHLY CONFIDENTIAL', 'CONFIDENTIAL'].includes(contentResult.classification)) {
+                const destinationInfo = contentResult.destination ? 
+                    ` to ${contentResult.destination.category}` : '';
+                return {
+                    allowed: false,
+                    message: `${contentResult.classification} file content detected${destinationInfo}`
+                };
+            }
+        }
+
+        // High file metadata risk should warn
+        if (metadataResult.riskLevel === 'HIGH') {
+            return {
+                allowed: false,
+                message: `High-risk file detected: ${metadataResult.recommendation}`
+            };
+        }
+
+        // Medium risk files to high-risk destinations
+        if (metadataResult.riskLevel === 'MEDIUM' && context.destinationRisk === 'HIGH') {
+            return {
+                allowed: false,
+                message: `Business file to high-risk destination: ${metadataResult.recommendation}`
+            };
+        }
+
+        // Allow with warning for medium risk
+        if (metadataResult.riskLevel === 'MEDIUM') {
+            return {
+                allowed: false,
+                message: `Medium-risk file: ${metadataResult.recommendation}`
+            };
+        }
+
+        return {
+            allowed: true,
+            message: 'File upload allowed'
+        };
     }
     
     detectPatterns(content) {
@@ -141,7 +267,42 @@ class FastAnalyzer {
             };
         }
         
-        // Check for bulk data exports - these are the most important
+        // Check for content classification first (highest priority)
+        const classificationFindings = findings.filter(f => f.type === 'content_classification');
+        if (classificationFindings.length > 0) {
+            const classification = classificationFindings[0];
+            
+            // HIGHLY CONFIDENTIAL and CONFIDENTIAL should be blocked
+            if (['HIGHLY CONFIDENTIAL', 'CONFIDENTIAL'].includes(classification.classification)) {
+                const destinationInfo = classification.destination ? 
+                    ` to ${classification.destination.category} (${classification.destination.risk} risk)` : '';
+                return {
+                    allowed: false,
+                    message: `${classification.classification} content detected${destinationInfo} (Score: ${classification.adjustedScore}/100)`
+                };
+            }
+            
+            // INTERNAL content - consider destination risk
+            if (classification.classification === 'INTERNAL') {
+                const destinationInfo = classification.destination ? 
+                    ` to ${classification.destination.category} (${classification.destination.risk} risk)` : '';
+                    
+                // Block INTERNAL content going to HIGH risk destinations
+                if (classification.destination?.risk === 'HIGH') {
+                    return {
+                        allowed: false,
+                        message: `Internal content blocked - HIGH RISK destination: ${classification.destination.category}`
+                    };
+                }
+                
+                return {
+                    allowed: false,
+                    message: `Internal company content detected${destinationInfo} (Score: ${classification.adjustedScore}/100)`
+                };
+            }
+        }
+        
+        // Check for bulk data exports - these are very important
         const bulkFindings = findings.filter(f => f.category === 'bulk_pii');
         if (bulkFindings.length > 0) {
             const bulkFinding = bulkFindings[0];
@@ -160,21 +321,23 @@ class FastAnalyzer {
             };
         }
         
-        // Multiple email addresses (likely a list)
+        // Multiple email addresses (likely a list) - use configuration threshold
         const emailFindings = findings.filter(f => f.type === 'email');
-        if (emailFindings.length > 0 && emailFindings[0].count >= 3) {
+        const emailThreshold = this.config.bulkDataSettings.emailThreshold;
+        if (emailFindings.length > 0 && emailFindings[0].count >= emailThreshold) {
             return {
                 allowed: false,
-                message: `Multiple email addresses detected (${emailFindings[0].count} addresses)`
+                message: `Multiple email addresses detected (${emailFindings[0].count} addresses, threshold: ${emailThreshold})`
             };
         }
         
-        // Multiple phone numbers
+        // Multiple phone numbers - use configuration threshold
         const phoneFindings = findings.filter(f => f.type === 'phone');
-        if (phoneFindings.length > 0 && phoneFindings[0].count >= 3) {
+        const phoneThreshold = this.config.bulkDataSettings.phoneThreshold;
+        if (phoneFindings.length > 0 && phoneFindings[0].count >= phoneThreshold) {
             return {
                 allowed: false,
-                message: `Multiple phone numbers detected (${phoneFindings[0].count} numbers)`
+                message: `Multiple phone numbers detected (${phoneFindings[0].count} numbers, threshold: ${phoneThreshold})`
             };
         }
         

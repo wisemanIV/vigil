@@ -35,12 +35,12 @@ export class DialogHelper {
     
     async clickAllow() {
         await this.page.click('#vigil-allow');
-        await this.page.waitForTimeout(300);
+        await new Promise(resolve => setTimeout(resolve, 300));
     }
     
     async clickBlock() {
         await this.page.click('#vigil-block');
-        await this.page.waitForTimeout(300);
+        await new Promise(resolve => setTimeout(resolve, 300));
     }
     
     async isDialogClosed() {
