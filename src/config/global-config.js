@@ -31,7 +31,8 @@ class VigilConfig {
                 'techcorp_confidential',
                 'tc_internal',
                 'company_private'
-            ]
+            ],
+            dataProtectionPolicyUrl: 'https://legal.hubspot.com/privacy-policy'
         };
 
         // Risk Tolerance Settings
@@ -367,6 +368,11 @@ class VigilConfig {
     // Get confidentiality markers
     getConfidentialityMarkers() {
         return this.company.confidentialityMarkers;
+    }
+
+    // Get data protection policy URL
+    getDataProtectionPolicyUrl() {
+        return this.company.dataProtectionPolicyUrl;
     }
 
     // Get risk threshold for classification

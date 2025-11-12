@@ -1,6 +1,7 @@
 import BulkDataDetector from './bulk-data-detector.js';
 import { ContentClassificationDetector } from './content-classification-detector.js';
 import { FileMetadataAnalyzer } from './file-metadata-analyzer.js';
+import { ProprietaryDataDetector } from './proprietary-data-detector.js';
 import { GlobalConfig } from '../config/global-config.js';
 
 class FastAnalyzer {
@@ -9,6 +10,7 @@ class FastAnalyzer {
         this.bulkDetector = new BulkDataDetector();
         this.classificationDetector = new ContentClassificationDetector();
         this.fileMetadataAnalyzer = new FileMetadataAnalyzer();
+        this.proprietaryDetector = new ProprietaryDataDetector();
     }
     
     async analyze(content, context) {
@@ -29,6 +31,7 @@ class FastAnalyzer {
             const patternFindings = this.detectPatterns(content);
             const bulkFindings = this.bulkDetector.analyze(content);
             const densityFinding = this.bulkDetector.analyzeDensity(content);
+            const proprietaryFindings = this.proprietaryDetector.analyze(content);
             
             // Run comprehensive content classification with destination context
             const classificationResult = this.classificationDetector.analyze(content, context);
@@ -37,6 +40,7 @@ class FastAnalyzer {
             const findings = [
                 ...patternFindings,
                 ...bulkFindings,
+                ...proprietaryFindings,
                 ...(densityFinding ? [densityFinding] : [])
             ];
             
