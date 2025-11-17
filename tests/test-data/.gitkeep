@@ -1,0 +1,23 @@
+# Test Data Directory
+# 
+# This directory structure contains test documents for DLP analysis testing.
+# The actual documents are excluded from git for privacy and repository size.
+# 
+# Expected Structure:
+# tests/test-data/
+# ├── .gitkeep                    (this file - tracked by git)
+# ├── dataset.js                  (ignored - test data configuration)
+# └── documents/                  (ignored - all content)
+#     ├── confidential/           (32 test documents)
+#     │   ├── financial_data.xlsx
+#     │   ├── customer_list.csv
+#     │   └── ...
+#     └── public/                 (5 test documents)
+#         ├── blog_post.md
+#         ├── public_docs.pdf
+#         └── ...
+# 
+# To set up test data:
+# 1. Create the documents/ subdirectories
+# 2. Add sample documents (see integration-test.cjs for expected filenames)
+# 3. Run integration tests: ./run-integration-test.sh
